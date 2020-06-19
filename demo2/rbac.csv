@@ -1,0 +1,10 @@
+p,admin,data1,read
+p,admin,data1,write
+p,admin,data2,write
+p,admin,data2,read
+
+p,developer,data1,read
+
+g,he1,admin
+g,he2,developer
+
