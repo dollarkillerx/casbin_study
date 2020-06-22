@@ -24,8 +24,8 @@ func main() {
 		log.Fatalln("new enforcer err: ",err)
 	}
 
-	check(enforcer, "dajun", "data1", "read")
-	check(enforcer, "lizi", "data2", "write")
-	check(enforcer, "dajun", "data1", "write")
-	check(enforcer, "dajun", "data2", "read")
+	check(enforcer, "user1", "data1", "read")
+	check(enforcer, "user2", "data2", "write")
+	check(enforcer, "user1", "data1", "write")
+	check(enforcer, "user2", "data2", "read")
 }

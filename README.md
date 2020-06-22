@@ -65,31 +65,33 @@ code:
 package main
 
 import (
-  "fmt"
-  "log"
-
-  "github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2"
+	"log"
 )
 
-func check(e *casbin.Enforcer, sub, obj, act string) {
-  ok, _ := e.Enforce(sub, obj, act)
-  if ok {
-    fmt.Printf("%s CAN %s %s\n", sub, act, obj)
-  } else {
-    fmt.Printf("%s CANNOT %s %s\n", sub, act, obj)
-  }
+func check(e *casbin.Enforcer,sub,obj,act string) {
+	enforce, err := e.Enforce(sub, obj, act)
+	if err != nil {
+		log.Fatalln("check error: ",err)
+	}
+
+	if enforce {
+		log.Printf("%s %s %s SUCCESS \n",sub,obj,act)
+	}else {
+		log.Printf("%s %s %s ERROR \n",sub,obj,act)
+	}
 }
 
 func main() {
-  e, err := casbin.NewEnforcer("./rbac.conf", "./policy.csv")
-  if err != nil {
-    log.Fatalf("NewEnforecer failed:%v\n", err)
-  }
+	enforcer, err := casbin.NewEnforcer("./model.conf", "./policy.csv")
+	if err != nil {
+		log.Fatalln("new enforcer err: ",err)
+	}
 
-  check(e, "dajun", "data1", "read")
-  check(e, "lizi", "data2", "write")
-  check(e, "dajun", "data1", "write")
-  check(e, "dajun", "data2", "read")
+	check(enforcer, "user1", "data1", "read")
+	check(enforcer, "user2", "data2", "write")
+	check(enforcer, "user1", "data1", "write")
+	check(enforcer, "user2", "data2", "read")
 }
 ```
 请求必须完全匹配某条策略才能通过。`("dajun", "data1", "read")`匹配p,
@@ -125,7 +127,7 @@ r = sub, obj, act
 p = sub, obj, act
 
 [role_definition]
-g = _, _  # 用户组关系  a,b a属于用户组b  
+g = _, _  # 用户组关系  a,b a用户 属于 用户组b  
 
 [matchers]
 m = r.sub == p.sub && r.obj == p.obj && r.act == p.act
@@ -145,4 +147,115 @@ p,developer,data1,read
 
 g,he1,admin  # he1属于 admin
 g,he2,developer
+```
+### RBACs 
+```editorconfig 
+[role_definition]
+g = _, _  
+g2 = _, _ # 新增一个 资源组
+
+[matchers]
+m = g(r.sub, p.sub) && (r.obj, p.obj) && r.act == p.act
+```
+csv
+```csv
+p,admin,prod,read
+p,admin,prod,write
+p,admin,dev,read
+p,admin,dev,write
+
+p,developer,dev,read
+p,developer,dev,write
+p,developer,dev,read
+
+g,user1,admin
+g,user2,develper
+
+g2,prod.data,prod
+g2,dev.data,dev
+```
+### RBAC domain
+- domain 领域
+- tenant 租户
+```editorconfig
+[request_definition]
+r = sub, dom, obj, act
+
+[policy_definition]
+p = sub, dom, obj, act
+
+[role_definition]
+g = _, _ , _
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[matchers]
+m = g( r.sub, p.sub, r.dom ) && r.dom == p.dom && r.obj == p.obj && r.act == p.act
+```
+csv
+```csv 
+p, admin, tenant1, data1, read
+p, admin, tenant2, data2, read
+g, user1, admin, tenant1
+g, user2, developer, tenant2
+```
+
+### ABAC 动态的RBAC (ARAC笔RBAC更加细致 比如 规定一个时间区域内A用户有对资源B读的权限)
+```editorconfig 
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act
+
+[matchers]
+m = r.sub.Hour >= 9 && r.sub.Hour < 18 || r.sub.Name == r.obj.Owner
+
+[policy_effect]
+e = some(where (p.eft == allow))
+```
+```go
+type Object struct {
+  Name  string
+  Owner string
+}
+
+type Subject struct {
+  Name string
+  Hour int
+}
+
+func check(e *casbin.Enforcer, sub Subject, obj Object, act string) {
+    ok, err := e.Enforce(sub, obj, act)
+    if err != nil {
+        log.Fatalln("check error: ",err)
+    }
+    
+    if enforce {
+        log.Printf("%s %s %s SUCCESS \n",sub,obj,act)
+    }else {
+        log.Printf("%s %s %s ERROR \n",sub,obj,act)
+    }
+}
+
+func main() {
+  e, err := casbin.NewEnforcer("./model.conf", "./policy.csv")
+  if err != nil {
+  	log.Fatalln(err)
+  }
+
+  o := Object{"data", "user1"}
+  s1 := Subject{"user1", 10}
+  check(e, s1, o, "read")
+
+  s2 := Subject{"user2", 10}
+  check(e, s2, o, "read")
+
+  s3 := Subject{"user1", 20}
+  check(e, s3, o, "read")
+
+  s4 := Subject{"user2", 20}
+  check(e, s4, o, "read")
+}
 ```
